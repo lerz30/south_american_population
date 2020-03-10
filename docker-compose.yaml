@@ -1,0 +1,32 @@
+version: '2.3'
+
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: "zookeeper"
+    hostname: "zookeeper"
+    ports:
+      - 2181:2181
+    networks:
+      - internal
+  kafka:
+    image: wurstmeister/kafka
+    container_name: "kafka"
+    hostname: "kafka"
+    restart: always
+    ports:
+      - 9092:9092
+    depends_on:
+      - zookeeper
+    links:
+      - zookeeper:zookeeper
+    networks:
+      - internal
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CREATE_TOPICS: "my_topic:1:1"
+networks:
+  internal:
