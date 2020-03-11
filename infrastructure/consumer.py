@@ -8,8 +8,9 @@ os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming
 sc = SparkContext("local[10]", appName="PythonSparkStreamingKafka")
 #sc.setLogLevel("WARN")
 ssc = StreamingContext(sc, 10)
-kafkaStream = KafkaUtils.createStream(ssc, '172.31.0.2:2181', "cities-consumer-group", {'city_population' : 1})
+kafkaStream = KafkaUtils.createStream(ssc, '172.27.0.2:2181', "cities-consumer-group", {'city_population': 1})
 cities_dstream = kafkaStream.map(lambda v: json.loads(v[1]))
+
 
 def extract_values(city):
     values = []
