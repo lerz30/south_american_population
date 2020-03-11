@@ -3,12 +3,19 @@ from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.streaming.kafka import KafkaUtils
 import json
+import docker
+
+#Resolving zookeeper IP address
+client = docker.DockerClient()
+zk_container = client.containers.get("zookeeper")
+zk_ip = zk_container.attrs['NetworkSettings']['Networks']['spark_streaming_internal']['IPAddress']
+zk_port = zk_container.attrs['NetworkSettings']['Ports']['2181/tcp'][0]['HostPort']
 
 os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming-kafka-0-8_2.11:2.0.2 pyspark-shell'
 sc = SparkContext("local[10]", appName="PythonSparkStreamingKafka")
 #sc.setLogLevel("WARN")
 ssc = StreamingContext(sc, 10)
-kafkaStream = KafkaUtils.createStream(ssc, '172.27.0.2:2181', "cities-consumer-group", {'city_population': 1})
+kafkaStream = KafkaUtils.createStream(ssc, zk_ip + ":" + zk_port, "cities-consumer-group", {'city_population': 1})
 cities_dstream = kafkaStream.map(lambda v: json.loads(v[1]))
 
 
