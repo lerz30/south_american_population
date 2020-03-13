@@ -19,41 +19,18 @@ kafkaStream = KafkaUtils.createStream(ssc, zk_ip + ":" + zk_port, "cities-consum
 cities_dstream = kafkaStream.map(lambda v: json.loads(v[1]))
 
 
-def extract_values(city):
-    values = []
-    if city["City"] is not None:
-        values.append(city["City"])
-    if city["Year"] is not None:
-        values.append(city["Year"])
-    return values
-
-
-def create_filters(rdd):
-    values = rdd.map(lambda city: extract_values(city)).collect()
-    aux = {}
-    for i in values:
-        if len(aux) == 0:
-            aux[i[0]] = i[1]
-        else:
-            if i[0] in aux:
-                if i[1] > aux[i[0]]:
-                    aux[i[0]] = i[1]
-            else:
-                aux[i[0]] = i[1]
-    return aux
-
-
-def process(rdd):
-    filter = sc.broadcast(create_filters(rdd))
-    print(filter.value.items())
-    rdd = rdd.filter(lambda city: city["City"] in filter.value.items())
-    return rdd
-
-
 def add_field(city):
     if city["City"] is not None and city["Year"] is not None:
         city["Filter"] = str(city["City"]) + ", " + str(city['Year'])
     return city
+
+
+def create_tuple(rdd):
+    if rdd["City"] is not None and rdd["Year"] is not None:
+        return (rdd["City"], int(rdd["Year"]))
+
+def modify_field(rdd):
+    return None
 
 
 #South American countries
@@ -72,6 +49,39 @@ sa_cities_wfilter = sa_cities_raw\
     .map(lambda city: (add_field(city)))
 sa_cities_wfilter.pprint()
 
+dstream = sa_cities_wfilter\
+    .map(lambda rdd: create_tuple(rdd))\
+    .reduceByKey(max)\
+    .map(lambda rdd: modify_field)\
+    .transform(lambda rdd: rdd.sortBy(lambda x: x[0]))
+dstream.pprint()
+
+cities = sa_cities_wfilter\
+    .join(dstream, "Fil")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
 #Total South American cities
 sa_cities_count = sa_cities_raw.count()
 sa_cities_count.pprint()
@@ -90,11 +100,8 @@ sa_cities_country_count = sa_cities_raw\
     .filter(lambda rdd: int(rdd[1] > 5))\
     .transform(lambda rdd: rdd.sortBy(lambda city: -city[1]))
 sa_cities_country_count.pprint()
+'''
 
-aux = sa_cities_raw\
-    .transform(lambda rdd: rdd.sortBy(lambda city: city["City"]))\
-    .transform(lambda rdd: process(rdd))
-aux.pprint()
 
 
 ssc.start()
