@@ -19,18 +19,17 @@ kafkaStream = KafkaUtils.createStream(ssc, zk_ip + ":" + zk_port, "cities-consum
 cities_dstream = kafkaStream.map(lambda v: json.loads(v[1]))
 
 
-def add_field(city):
-    if city["City"] is not None and city["Year"] is not None:
-        city["Filter"] = str(city["City"]) + ", " + str(city['Year'])
-    return city
-
-
 def create_tuple(rdd):
     if rdd["City"] is not None and rdd["Year"] is not None:
-        return (rdd["City"], int(rdd["Year"]))
+        return (rdd["City"], rdd["Year"])
 
-def modify_field(rdd):
-    return None
+
+def simplify(rdd):
+    if rdd["City"] is not None and rdd["Country or Area"] is not None and rdd["Value"] is not None and rdd["Year"] is not None:
+        return {"City": rdd["City"],
+                "Country": rdd["Country or Area"],
+                "Value": rdd["Value"],
+                "Year": rdd["Year"]}
 
 
 #South American countries
@@ -38,70 +37,43 @@ sa_countries = ["Argentina", "Brazil", "Bolivia (Plurinational State of)", "Colo
                 "Peru", "Venezuela (Bolivarian Republic of)", "Uruguay"]
 
 #South American Cities
-sa_cities_raw = cities_dstream\
+cities_raw = cities_dstream\
     .filter(lambda rdd: rdd["Country or Area"] in sa_countries)\
     .filter(lambda rdd: rdd["City type"] == "City proper")\
-    .transform(lambda rdd: rdd.sortBy(lambda city: city["City"]))
-sa_cities_raw.pprint()
+    .transform(lambda rdd: rdd.sortBy(lambda city: city["City"]))\
+    .map(lambda rdd: simplify(rdd))
+cities_raw.pprint()
 
-#DStream with cities + new field
-sa_cities_wfilter = sa_cities_raw\
-    .map(lambda city: (add_field(city)))
-sa_cities_wfilter.pprint()
+#Latest census year by city
+census_year = cities_raw\
+    .map(lambda rdd: (rdd["City"], int(rdd["Year"])))\
+    .reduceByKey(max)
+census_year.pprint()
 
-dstream = sa_cities_wfilter\
-    .map(lambda rdd: create_tuple(rdd))\
-    .reduceByKey(max)\
-    .map(lambda rdd: modify_field)\
-    .transform(lambda rdd: rdd.sortBy(lambda x: x[0]))
-dstream.pprint()
-
-cities = sa_cities_wfilter\
-    .join(dstream, "Fil")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-'''
-#Total South American cities
-sa_cities_count = sa_cities_raw.count()
-sa_cities_count.pprint()
+#Total number of cities
+total_cities = census_year\
+    .count()\
+    .pprint()
 
 #Number of cities by country
-sa_cities_country_count = sa_cities_raw\
-    .map(lambda rdd: rdd["Country or Area"])\
+cities_by_country = cities_raw\
+    .map(lambda rdd: (rdd["Country"], rdd["City"]))\
+    .transform(lambda rdd: rdd.distinct())\
+    .map(lambda rdd: rdd[0])\
     .countByValue()\
-    .transform(lambda rdd: rdd.sortBy(lambda city: -city[1]))
-sa_cities_country_count.pprint()
+    .transform(lambda rdd: rdd.sortBy(lambda city: -city[1]))\
+    .pprint()
 
-#Cities that are repeated over 5 times
-sa_cities_country_count = sa_cities_raw\
-    .map(lambda rdd: rdd["City"])\
-    .countByValue()\
-    .filter(lambda rdd: int(rdd[1] > 5))\
-    .transform(lambda rdd: rdd.sortBy(lambda city: -city[1]))
-sa_cities_country_count.pprint()
-'''
+#Cities sortedby population
+most_populated_cities = cities_raw\
+    .map(lambda rdd: (rdd["City"], float(rdd["Value"])))\
+    .reduceByKey(max)\
+    .pprint()
 
+#Most populated city by country
+
+
+#Total popilation by Country
 
 
 ssc.start()
