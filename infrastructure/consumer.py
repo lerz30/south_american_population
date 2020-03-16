@@ -80,7 +80,7 @@ most_populated_cities = cities_raw\
     .pprint()
 
 #Total population by Country
-total_countri_pop = cities_raw\
+total_country_pop = cities_raw\
     .map(lambda rdd: (create_tuple(rdd)))\
     .reduceByKey(max)\
     .map(lambda rdd: get_country_pop(rdd)) \
