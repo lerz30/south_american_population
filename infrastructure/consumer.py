@@ -14,19 +14,22 @@ zk_port = zk_container.attrs['NetworkSettings']['Ports']['2181/tcp'][0]['HostPor
 os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming-kafka-0-8_2.11:2.0.2 pyspark-shell'
 sc = SparkContext("local[10]", appName="PythonSparkStreamingKafka")
 #sc.setLogLevel("WARN")
-ssc = StreamingContext(sc, 10)
+ssc = StreamingContext(sc, 20)
 kafkaStream = KafkaUtils.createStream(ssc, zk_ip + ":" + zk_port, "cities-consumer-group", {'city_population': 1})
 cities_dstream = kafkaStream.map(lambda v: json.loads(v[1]))
 
 
 def create_tuple(rdd):
-    if rdd["Country"] is not None and rdd["City"] is not None and rdd["Value"] is not None:
-        return ((rdd["Country"], rdd["City"]), rdd["Value"])
+    if rdd["Country"] is not None and rdd["City"] is not None and rdd["City type"] is not None \
+            and rdd["Value"] is not None:
+        return ((rdd["Country"], rdd["City"], rdd["City type"]), rdd["Value"])
 
 
 def simplify(rdd):
-    if rdd["City"] is not None and rdd["Country or Area"] is not None and rdd["Value"] is not None and rdd["Year"] is not None:
+    if rdd["City"] is not None and rdd["City type"] is not None and rdd["Country or Area"] is not None \
+            and rdd["Value"] is not None and rdd["Year"] is not None:
         return {"City": rdd["City"],
+                "City type":rdd["City type"],
                 "Country": rdd["Country or Area"],
                 "Value": rdd["Value"],
                 "Year": rdd["Year"]}
@@ -45,7 +48,6 @@ sa_countries = ["Argentina", "Brazil", "Bolivia (Plurinational State of)", "Colo
 #South American Cities
 cities_raw = cities_dstream\
     .filter(lambda rdd: rdd["Country or Area"] in sa_countries)\
-    .filter(lambda rdd: rdd["City type"] == "Urban agglomeration")\
     .transform(lambda rdd: rdd.sortBy(lambda city: city["City"]))\
     .map(lambda rdd: simplify(rdd))
 cities_raw.pprint()
@@ -77,15 +79,13 @@ most_populated_cities = cities_raw\
     .transform(lambda rdd: rdd.sortBy(lambda city: -city[1]))\
     .pprint()
 
-#Most populated city by country
-
-
 #Total population by Country
-total_pop = cities_raw\
+total_countri_pop = cities_raw\
     .map(lambda rdd: (create_tuple(rdd)))\
     .reduceByKey(max)\
     .map(lambda rdd: get_country_pop(rdd)) \
-    .reduceByKey(lambda country, pop: country + pop)\
+    .reduceByKey(lambda country, pop: float(country + pop))\
+    .transform(lambda rdd: rdd.sortBy(lambda city: -city[1]))\
     .pprint()
 
 ssc.start()
